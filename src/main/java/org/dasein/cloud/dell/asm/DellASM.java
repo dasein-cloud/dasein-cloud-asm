@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2013 Dell, Inc.
+ * Copyright (C) 2009-2015 Dell, Inc.
  * See annotations for authorship information
  *
  * ====================================================================
@@ -19,142 +19,127 @@
 
 package org.dasein.cloud.dell.asm;
 
+import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.SSLContextBuilder;
+import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.log4j.Logger;
-import org.apache.velocity.app.Velocity;
 import org.dasein.cloud.AbstractCloud;
-import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.dell.asm.ci.ASMCIServices;
+import org.dasein.cloud.CloudException;
+import org.dasein.cloud.ContextRequirements;
+import org.dasein.cloud.InternalException;
 import org.dasein.cloud.dell.asm.compute.ASMComputeServices;
+import org.dasein.cloud.dell.asm.model.authentication.ASMAuthenticationRequestModel;
+import org.dasein.cloud.dell.asm.model.authentication.ASMAuthenticationResponseModel;
+import org.dasein.cloud.dell.asm.requests.ASMRequester;
+import org.dasein.cloud.dell.asm.requests.ASMRequests;
+import org.dasein.cloud.dell.asm.utils.LoggerUtils;
+import org.dasein.cloud.compute.ComputeServices;
+import org.dasein.cloud.dc.DataCenterServices;
 
-import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.Properties;
 
 /**
- * Bootstrap class for interacting with Dell ASM per the Dasein Cloud API.
- * @author George Reese
- * @version 2013.04 initial version
- * @since 2013.04
+ * Core cloud provider implementation for Dell Active System Manager.
+ * @author Drew Lyall (drew.lyall@imaginary.com)
+ * @since 2015.09.1
+ * @version 2015.09.1
  */
 public class DellASM extends AbstractCloud {
-    static private final Logger logger = getLogger(DellASM.class);
+    private static final Logger logger = LoggerUtils.getLogger(DellASM.class);
 
-    static private @Nonnull String getLastItem(@Nonnull String name) {
-        int idx = name.lastIndexOf('.');
-
-        if( idx < 0 ) {
-            return name;
-        }
-        else if( idx == (name.length()-1) ) {
-            return "";
-        }
-        return name.substring(idx + 1);
+    public enum HTTP_METHOD{
+        POST, GET;
     }
 
-    /**
-     * Provides access to a log4j logger aligned with the naming conventions for standard Dasein Cloud logging.
-     * @param cls the class in which logging is being done
-     * @return a log4j logger that handles standard message logging
-     */
-    static public @Nonnull Logger getLogger(@Nonnull Class<?> cls) {
-        String pkg = getLastItem(cls.getPackage().getName());
-
-        if( pkg.equals("asm") ) {
-            pkg = "";
-        }
-        else {
-            pkg = pkg + ".";
-        }
-        return Logger.getLogger("dasein.cloud.dell.asm.std." + pkg + getLastItem(cls.getName()));
-    }
-
-    /**
-     * Provides access to a log4j logger aligned with the naming conventions for Dasein Cloud wire logging. The wire logging
-     * is solely for logging data going over the network and not for internal messaging.
-     * @param cls the class in which the wire logging is being done
-     * @return the log4j logger that handles wire message logging
-     */
-    static public @Nonnull Logger getWireLogger(@Nonnull Class<?> cls) {
-        return Logger.getLogger("dasein.cloud.dell.asm.wire." + getLastItem(cls.getPackage().getName()) + "." + getLastItem(cls.getName()));
-    }
-
-    static public @Nonnegative long parseTimestamp(@Nonnull String ts) {
-        //
-        return 0L;
-    }
-
-    public DellASM(){
-        Properties props = new Properties();
-        props.setProperty("resource.loader", "class");
-        props.setProperty("class.resource.loader.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
-        Velocity.init(props);
-    }
+    private String ASM_API_VERSION = "V1";
+    private String DSN_ACCESS_KEY = "apiKey";
 
     @Override
     public @Nonnull String getCloudName() {
-        ProviderContext ctx = getContext();
-        String name = (ctx == null ? null : ctx.getCloudName());
-
-        return (name == null ? "Dell ASM CI" : name);
-    }
-
-    @Override
-    public @Nonnull ASMComputeServices getComputeServices() {
-        return new ASMComputeServices(this);
-    }
-
-    @Override
-    public @Nonnull ASMCIServices getCIServices() {
-        return new ASMCIServices(this);
-    }
-
-    @Override
-    public @Nonnull DataCenters getDataCenterServices() {
-        return new DataCenters(this);
+        return "ASM";
     }
 
     @Override
     public @Nonnull String getProviderName() {
-        return "Dell ASM";
+        return "Dell";
+    }
+
+    @Override
+    public @Nonnull ContextRequirements getContextRequirements() {
+        return new ContextRequirements(
+                new ContextRequirements.Field(DSN_ACCESS_KEY, "The API Keypair", ContextRequirements.FieldType.KEYPAIR, ContextRequirements.Field.ACCESS_KEYS, true),
+                new ContextRequirements.Field("proxyHost", "Proxy host", ContextRequirements.FieldType.TEXT, null, false),
+                new ContextRequirements.Field("proxyPort", "Proxy port", ContextRequirements.FieldType.TEXT, null, false)
+        );
     }
 
     @Override
     public @Nullable String testContext() {
-        if( logger.isTraceEnabled() ) {
-            logger.trace("ENTER: " + DellASM.class.getName() + ".testContext()");
+        if(getContext() == null) {
+            logger.error("Context object was null");
+            return null;
         }
+
         try {
-            ProviderContext ctx = null;//getContext();
-
-            if( ctx == null ) {
-                logger.warn("No context was provided for testing");
-                if( logger.isDebugEnabled() ) {
-                    logger.debug("testContext()=null");
-                }
-                return null;
+            String[] keys = getAPIKeys();
+            if(keys.length == 2 && keys[0].length() > 0 && keys[1].length() > 0){
+                return getContext().getAccountNumber();//TODO: Might be something better I can get and return
             }
-            try {
-                APIHandler handler = new APIHandler(this);
-                handler.authenticate(ctx);
-
-                if( logger.isDebugEnabled() ) {
-                    logger.debug("testContext()=" + ctx.getAccountNumber());
-                }
-                return ctx.getAccountNumber();
-            }
-            catch( Throwable t ) {
-                logger.error("Error querying API key: " + t.getMessage());
-                if( logger.isDebugEnabled() ) {
-                    logger.debug("testContext()=null");
-                }
-                return null;
-            }
+        } catch (Exception ex) {
+            logger.error("Could not text context: " + ex.getMessage());
         }
-        finally {
-            if( logger.isTraceEnabled() ) {
-                logger.trace("EXIT: " + DellASM.class.getName() + ".textContext()");
-            }
-        }
+        return null;
     }
+
+    public String[] getAPIKeys() throws InternalException{
+        if(getContext() != null && getContext().getConfigurationValue(DSN_ACCESS_KEY) != null){
+            byte[][] configValues = (byte[][])getContext().getConfigurationValue(DSN_ACCESS_KEY);
+
+            ASMAuthenticationRequestModel authRequest = new ASMAuthenticationRequestModel();
+            authRequest.setUserName(new String(configValues[0]));
+            authRequest.setPassword(new String(configValues[1]));
+            authRequest.setDomain(getContext().getAccountNumber());
+
+            try{
+                HttpUriRequest request = new ASMRequests(this).getAPIKeys(authRequest).build();
+                ASMAuthenticationResponseModel response = new ASMRequester(this, request).withXmlProcessor(ASMAuthenticationResponseModel.class).execute();
+                return new String[]{response.getApiKey(), response.getApiSecret()};
+            }
+            catch(CloudException ex){
+                logger.error(ex.getMessage());
+                return null;
+            }
+        }
+        else throw new InternalException("Credentials not properly provided");
+    }
+
+    public HttpClientBuilder getASMClientBuilder(){
+        try{
+            //TODO: Add an if(insecure) flag here - useful for testing etc.
+            SSLContextBuilder builder = new SSLContextBuilder();
+            builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
+            SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build(), SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER);
+            return HttpClients.custom().setSSLSocketFactory(sslsf);
+        }
+        catch(Exception ex){
+            logger.error(ex.getMessage());
+        }
+        return null;
+    }
+
+    public String getApiVersion(){
+        return ASM_API_VERSION;
+    }
+
+    @Override
+    public @Nonnull DataCenterServices getDataCenterServices() {
+        return new ASMGeography(this);
+    }
+
+    @Override
+    public @Nonnull ComputeServices getComputeServices() { return new ASMComputeServices(this); }
 }
