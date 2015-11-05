@@ -4,6 +4,7 @@ import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
+import java.util.List;
 
 @XmlRootElement(name="components")
 @XmlAccessorType(XmlAccessType.FIELD)
@@ -21,11 +22,13 @@ public class ASMServiceTemplateComponent {
     @XmlElement(name="type")
     private String type;
     @XmlElement(name="teardown")
-    private String teardown;
+    private Boolean teardown;
+    @XmlElement(name="asmGUID")
+    private String asmGUID;
     @XmlElement(name="relatedComponents")
     private ASMServiceTemplateRelatedComponent relatedComponents;
     @XmlElement(name="resources")
-    private ASMServiceTemplateComponentResource resources;
+    private List<ASMServiceTemplateComponentResource> resources;
     @XmlElement(name="manageFirmware")
     private boolean manageFirmware;
 
@@ -73,13 +76,17 @@ public class ASMServiceTemplateComponent {
         this.type = type;
     }
 
-    public String getTeardown() {
+    public Boolean getTeardown() {
         return teardown;
     }
 
-    public void setTeardown(String teardown) {
+    public void setTeardown(Boolean teardown) {
         this.teardown = teardown;
     }
+
+    public String getAsmGUID() { return asmGUID; }
+
+    public void setAsmGUID(String asmGUID) { this.asmGUID = asmGUID; }
 
     public ASMServiceTemplateRelatedComponent getRelatedComponents() {
         return relatedComponents;
@@ -89,9 +96,9 @@ public class ASMServiceTemplateComponent {
         this.relatedComponents = relatedComponents;
     }
 
-    public ASMServiceTemplateComponentResource getResources() { return resources; }
+    public List<ASMServiceTemplateComponentResource> getResources() { return resources; }
 
-    public void setResources(ASMServiceTemplateComponentResource resources){ this.resources = resources; }
+    public void setResources(List<ASMServiceTemplateComponentResource> resources){ this.resources = resources; }
 
     public boolean isManageFirmware() {
         return manageFirmware;

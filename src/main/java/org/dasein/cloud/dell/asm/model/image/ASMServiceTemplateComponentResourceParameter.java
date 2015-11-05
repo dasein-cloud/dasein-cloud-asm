@@ -27,6 +27,10 @@ public class ASMServiceTemplateComponentResourceParameter {
     private int min;
     @XmlElement(name="max")
     private int max;
+    @XmlElement(name="dependencyTarget")
+    private String dependencyTarget;
+    @XmlElement(name="dependencyValue")
+    private String dependencyValue;
     @XmlElement(name="options")
     private List<ASMServiceTemplateComponentResourceParameterOption> options;
     @XmlElement(name="readOnly")
@@ -111,6 +115,14 @@ public class ASMServiceTemplateComponentResourceParameter {
     public void setMax(int max) {
         this.max = max;
     }
+
+    public String getDependencyTarget() { return dependencyTarget; }
+
+    public void setDependencyTarget(String dependencyTarget) { this.dependencyTarget = dependencyTarget; }
+
+    public String getDependencyValue() { return dependencyValue; }
+
+    public void setDependencyValue(String dependencyValue) { this.dependencyValue = dependencyValue; }
 
     public List<ASMServiceTemplateComponentResourceParameterOption> getOptions() {
         return options;

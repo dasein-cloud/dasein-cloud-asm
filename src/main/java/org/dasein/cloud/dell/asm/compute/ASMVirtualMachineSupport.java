@@ -10,9 +10,7 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.compute.*;
 import org.dasein.cloud.dell.asm.DellASM;
 import org.dasein.cloud.dell.asm.capabilities.ASMVirtualMachineCapabilities;
-import org.dasein.cloud.dell.asm.model.image.ASMServiceTemplateComponent;
-import org.dasein.cloud.dell.asm.model.image.ASMServiceTemplateComponentResourceParameter;
-import org.dasein.cloud.dell.asm.model.image.ASMServiceTemplateModel;
+import org.dasein.cloud.dell.asm.model.image.*;
 import org.dasein.cloud.dell.asm.model.virtualmachine.ASMDeploymentModel;
 import org.dasein.cloud.dell.asm.model.virtualmachine.ASMDeploymentsModel;
 import org.dasein.cloud.dell.asm.requests.ASMRequester;
@@ -104,35 +102,51 @@ public class ASMVirtualMachineSupport extends AbstractVMSupport<DellASM> {
     public @Nonnull VirtualMachine launch(@Nonnull VMLaunchOptions withLaunchOptions) throws CloudException, InternalException {
         HttpUriRequest getServiceTemplate = new ASMRequests(provider).getServiceTemplate(withLaunchOptions.getMachineImageId()).build();
         ASMServiceTemplateModel serviceTemplate = new ASMRequester(provider, getServiceTemplate).withXmlProcessor(ASMServiceTemplateModel.class).execute();
-        for(ASMServiceTemplateComponent component : serviceTemplate.getComponents()){
-            for(ASMServiceTemplateComponentResourceParameter params : component.getResources().getParameters()){
 
+        for(ASMServiceTemplateComponent component : serviceTemplate.getComponents()){
+            for(ASMServiceTemplateComponentResource resource : component.getResources()){
+                if(resource.getId().equals("asm::cluster")){
+                    for(ASMServiceTemplateComponentResourceParameter params : resource.getParameters()){
+                        if(params.getId().equals("$new$datacenter")){
+                            params.setDependencyTarget("datacenter");
+                            params.setDependencyValue("$new$");
+                        }
+                        else if(params.getId().equals("$new$cluster")){
+                            params.setDependencyTarget("cluster");
+                            params.setDependencyValue("$new$");
+                        }
+                    }
+                }
             }
         }
 
-        ASMDeploymentModel deployment = new ASMDeploymentModel();
-        deployment.setName(withLaunchOptions.getFriendlyName());
-        deployment.setDescription(withLaunchOptions.getDescription());
-        deployment.setNumberOfDeployments(1);
-        deployment.setImage(serviceTemplate);
-
         try{
-            HttpUriRequest request = new ASMRequests(provider).launchVirtualMachine(deployment).build();
-            System.out.println(new ASMRequester(provider, request).execute());
-
-            VirtualMachine vm = new VirtualMachine();
-            vm.setProviderVirtualMachineId("temp");
-            return vm;
+            ASMDeploymentModel deploymentRequest = new ASMDeploymentModel();
+            deploymentRequest.setName(withLaunchOptions.getFriendlyName());
+            deploymentRequest.setDescription(withLaunchOptions.getDescription());
+            deploymentRequest.setNumberOfDeployments(1);
+            deploymentRequest.setImage(serviceTemplate);
+            HttpUriRequest request = new ASMRequests(provider).launchVirtualMachine(deploymentRequest).build();
+            ASMDeploymentModel deployment = new ASMRequester(provider, request).withXmlProcessor(ASMDeploymentModel.class).execute();
+            return toVirtualMachine(deployment);
         }
         catch(CloudException ex){
             logger.error(ex.getMessage());
-            return null;
+            throw new CloudException(ex);
         }
     }
 
     @Override
     public void terminate(@Nonnull String vmId, @Nullable String explanation) throws InternalException, CloudException {
+        HttpUriRequest getVMRequest = new ASMRequests(provider).getVirtualMachine(vmId).build();
+        ASMDeploymentModel deployment = new ASMRequester(provider, getVMRequest).withXmlProcessor(ASMDeploymentModel.class).execute();
+        for(ASMServiceTemplateComponent component : deployment.getImage().getComponents()){
+            component.setTeardown(true);
+        }
+        deployment.setTeardown(true);
 
+        HttpUriRequest request = new ASMRequests(provider).terminateVirtualMachine(deployment, vmId).build();
+        System.out.println(new ASMRequester(provider, request).execute());
     }
 
     @Override
@@ -154,7 +168,9 @@ public class ASMVirtualMachineSupport extends AbstractVMSupport<DellASM> {
         vm.setProviderVirtualMachineId(deployment.getProviderVirtualMachineId());
         vm.setName(deployment.getName());
         //TODO: Set created date/time
-        //TODO: Set current state
+        if(deployment.getStatus().equals("complete")) vm.setCurrentState(VmState.RUNNING);
+        else if(deployment.getStatus().equals("in_progress")) vm.setCurrentState(VmState.PENDING);
+        else vm.setCurrentState(VmState.ERROR);
         vm.setDescription(deployment.getDescription());
         vm.setImagable(false);//TODO: This might change
         vm.setPersistent(true);

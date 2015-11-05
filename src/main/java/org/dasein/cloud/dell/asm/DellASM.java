@@ -52,7 +52,7 @@ public class DellASM extends AbstractCloud {
     private static final Logger logger = LoggerUtils.getLogger(DellASM.class);
 
     public enum HTTP_METHOD{
-        POST, GET;
+        PUT, POST, GET
     }
 
     private String ASM_API_VERSION = "V1";

@@ -13,6 +13,7 @@ import org.dasein.cloud.dell.asm.utils.LoggerUtils;
 import org.dasein.cloud.util.requester.entities.DaseinObjectToXmlEntity;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -35,7 +36,7 @@ public class ASMRequests {
         this.provider = provider;
     }
 
-    public RequestBuilder getRequestBuilder(DellASM.HTTP_METHOD httpMethod, ASMRequestType.RequestType requestType, String resourceId, boolean addAuthentication) throws InternalException, CloudException{
+    public RequestBuilder getRequestBuilder(@Nonnull DellASM.HTTP_METHOD httpMethod, @Nonnull ASMRequestType.RequestType requestType, @Nullable String resourceId, boolean addAuthentication) throws InternalException, CloudException{
         RequestBuilder requestBuilder = null;
         switch (httpMethod) {
             case POST:
@@ -60,7 +61,7 @@ public class ASMRequests {
         return requestBuilder;
     }
 
-    public RequestBuilder getAPIKeys(ASMAuthenticationRequestModel requestModel) throws InternalException, CloudException{
+    public RequestBuilder getAPIKeys(@Nonnull ASMAuthenticationRequestModel requestModel) throws InternalException, CloudException{
         RequestBuilder requestBuilder = getRequestBuilder(DellASM.HTTP_METHOD.POST, ASMRequestType.RequestType.AUTHENTICATE, null, false);
         requestBuilder.setEntity(new DaseinObjectToXmlEntity<>(requestModel));
         return requestBuilder;
@@ -86,15 +87,22 @@ public class ASMRequests {
         return requestBuilder;
     }
 
-    public RequestBuilder launchVirtualMachine(ASMDeploymentModel deploymentModel) throws InternalException, CloudException{
+    public RequestBuilder launchVirtualMachine(@Nonnull ASMDeploymentModel deploymentModel) throws InternalException, CloudException{
         RequestBuilder requestBuilder = getRequestBuilder(DellASM.HTTP_METHOD.POST, ASMRequestType.RequestType.DEPLOYMENT, null, true);
         requestBuilder.setEntity(new DaseinObjectToXmlEntity<>(deploymentModel));
 
-        try{
-            System.out.println(EntityUtils.toString(requestBuilder.getEntity()));
+        if(wire.isDebugEnabled()){
+            try{wire.debug(EntityUtils.toString(requestBuilder.getEntity()));}catch(Exception ex){}
         }
-        catch(Exception ex){ex.printStackTrace();}
+        return requestBuilder;
+    }
 
+    public RequestBuilder terminateVirtualMachine(@Nonnull ASMDeploymentModel deploymentModel, @Nonnull String providerVirtualMachineId) throws InternalException, CloudException{
+        RequestBuilder requestBuilder = getRequestBuilder(DellASM.HTTP_METHOD.PUT, ASMRequestType.RequestType.DEPLOYMENT, providerVirtualMachineId, true);
+        requestBuilder.setEntity(new DaseinObjectToXmlEntity<>(deploymentModel));
+        if(wire.isDebugEnabled()){
+            try{wire.debug(EntityUtils.toString(requestBuilder.getEntity()));}catch(Exception ex){}
+        }
         return requestBuilder;
     }
 

@@ -28,6 +28,8 @@ public class ASMDeploymentModel {
     private ASMServiceTemplateModel image;
     @XmlElement(name="status")
     private String status;
+    @XmlElement(name="teardown")
+    private Boolean teardown;
     @XmlElement(name="templateValid")
     private Boolean templateValid;
     @XmlElement(name="updatedDate")
@@ -100,6 +102,10 @@ public class ASMDeploymentModel {
     public void setStatus(String status) {
         this.status = status;
     }
+
+    public Boolean getTeardown() { return teardown; }
+
+    public void setTeardown(Boolean teardown) { this.teardown = teardown; }
 
     public boolean isTemplateValid() {
         return templateValid;

@@ -59,7 +59,7 @@ public class ASMVirtualMachineCapabilities extends AbstractCapabilities<DellASM>
 
     @Override
     public boolean canTerminate(@Nonnull VmState fromState) throws CloudException, InternalException {
-        return false;
+        return true;
     }
 
     @Override
@@ -269,7 +269,7 @@ public class ASMVirtualMachineCapabilities extends AbstractCapabilities<DellASM>
 
     @Override
     public boolean supportsTerminate() {
-        return false;
+        return true;
     }
 
     @Override
